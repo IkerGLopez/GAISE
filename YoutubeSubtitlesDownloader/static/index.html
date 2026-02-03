@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Subtitles Downloader</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📹 YouTube Subtitles Downloader</h1>
+            <p class="subtitle">Extract and download subtitles from any YouTube video</p>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <form id="urlForm">
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            id="videoUrl" 
+                            placeholder="Paste YouTube video URL here..." 
+                            required
+                        >
+                        <button type="submit" id="fetchBtn">
+                            <span class="btn-text">Get Subtitles</span>
+                            <span class="spinner hidden"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="errorMessage" class="error-message hidden"></div>
+            <div id="successMessage" class="success-message hidden"></div>
+
+            <div id="subtitlesSection" class="subtitles-section hidden">
+                <div class="section-header">
+                    <h2>Subtitles</h2>
+                    <button id="downloadBtn" class="download-btn">
+                        📥 Download SRT File
+                    </button>
+                </div>
+                <div id="subtitlesContent" class="subtitles-content"></div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Made with ❤️ for GAISE</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
