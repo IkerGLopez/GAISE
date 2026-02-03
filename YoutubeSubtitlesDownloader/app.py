@@ -74,6 +74,10 @@ def get_subtitles():
             'quiet': True,
             'outtmpl': {'default': '%(id)s.%(ext)s'},
         }
+        # Use cookies.txt for authentication if available
+        cookies_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
+        if os.path.exists(cookies_path):
+            ydl_opts['cookiefile'] = cookies_path
         transcript = None
         subtitle_lang = None
         srt_path = None
