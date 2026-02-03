@@ -1,5 +1,6 @@
 // API base URL
-const API_URL = window.location.origin;
+// Use relative URLs for API calls
+// const API_URL = window.location.origin;
 
 // Store current subtitles data
 let currentSubtitles = null;
@@ -97,7 +98,7 @@ urlForm.addEventListener('submit', async (e) => {
     subtitlesSection.classList.add('hidden');
     
     try {
-        const response = await fetch(`${API_URL}/api/subtitles`, {
+        const response = await fetch(`/api/subtitles`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -136,7 +137,7 @@ downloadBtn.addEventListener('click', async () => {
     }
     
     try {
-        const response = await fetch(`${API_URL}/api/download`, {
+        const response = await fetch(`/api/download`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

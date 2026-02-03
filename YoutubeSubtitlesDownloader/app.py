@@ -67,25 +67,38 @@ def get_subtitles():
             return jsonify({'error': 'Invalid YouTube URL'}), 400
         
         try:
-            # Try to get transcript (prioritize English, then any available language)
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            
+            transcript = None
+
             # Try to get English transcript first
             try:
                 transcript = transcript_list.find_transcript(['en']).fetch()
-            except:
-                # Get any available transcript
-                transcript = transcript_list.find_generated_transcript(
-                    transcript_list._manually_created_transcripts.keys() or 
-                    transcript_list._generated_transcripts.keys()
-                ).fetch()
-            
+            except Exception:
+                # Try manually created transcripts
+                for lang in transcript_list._manually_created_transcripts.keys():
+                    try:
+                        transcript = transcript_list.find_transcript([lang]).fetch()
+                        break
+                    except Exception:
+                        continue
+                # If still not found, try generated transcripts
+                if not transcript:
+                    for lang in transcript_list._generated_transcripts.keys():
+                        try:
+                            transcript = transcript_list.find_transcript([lang]).fetch()
+                            break
+                        except Exception:
+                            continue
+
+            if not transcript:
+                return jsonify({'error': 'No subtitles found for this video'}), 404
+
             return jsonify({
                 'success': True,
                 'video_id': video_id,
                 'subtitles': transcript
             })
-            
+
         except TranscriptsDisabled:
             return jsonify({'error': 'Subtitles are disabled for this video'}), 404
         except NoTranscriptFound:
