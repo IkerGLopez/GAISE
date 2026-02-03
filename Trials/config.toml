@@ -1,0 +1,8 @@
+model_provider="openrouter"
+model="openai/gpt-5.1-codex-mini"
+
+[model_providers.openrouter]
+name="openrouter"
+base_url="https://openrouter.ai/api/v1"
+env_file=".env"
+env_key="OPENROUTER_API_KEY"
