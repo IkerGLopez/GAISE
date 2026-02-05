@@ -65,51 +65,61 @@ def get_subtitles():
             return jsonify({'error': 'Invalid YouTube URL'}), 400
 
         # yt-dlp options for extracting subtitles only
+        # Allow user to request a specific subtitle language
+        requested_lang = data.get('lang', None)
+        subtitle_langs = ['en', 'en-US', 'en-GB', 'all']
+        if requested_lang:
+            subtitle_langs = [requested_lang]
+
         ydl_opts = {
             'skip_download': True,
             'writesubtitles': True,
             'writeautomaticsub': True,
             'subtitlesformat': 'srt',
-            'subtitleslangs': ['en', 'en-US', 'en-GB', 'all'],
+            'subtitleslangs': subtitle_langs,
             'quiet': True,
             'outtmpl': {'default': '%(id)s.%(ext)s'},
+            'sleep_subtitles': 60,  # Wait before downloading auto subs to avoid 429
         }
         # Use cookies.txt for authentication if available
         cookies_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
         if os.path.exists(cookies_path):
             ydl_opts['cookiefile'] = cookies_path
+        # Use cookies.txt for authentication if available
+        cookies_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
+        if os.path.exists(cookies_path):
+            ydl_opts['cookiefile'] = cookies_path
         transcript = None
-        subtitle_lang = None
         srt_path = None
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             # Find available subtitles
             subs = info.get('subtitles') or {}
             auto_subs = info.get('automatic_captions') or {}
-            # Prefer English, fallback to any
-            lang_priority = ['en', 'en-US', 'en-GB'] + list(subs.keys()) + list(auto_subs.keys())
-            found = False
-            for lang in lang_priority:
-                if lang in subs:
-                    subtitle_lang = lang
-                    found = True
-                    break
-                elif lang in auto_subs:
-                    subtitle_lang = lang
-                    found = True
-                    break
-            if not found:
+            # Use requested language if available
+            subtitle_lang = None
+            if requested_lang:
+                if requested_lang in subs:
+                    subtitle_lang = requested_lang
+                elif requested_lang in auto_subs:
+                    subtitle_lang = requested_lang
+            if not subtitle_lang:
+                # Fallback to any available
+                for lang in subtitle_langs:
+                    if lang in subs:
+                        subtitle_lang = lang
+                        break
+                    elif lang in auto_subs:
+                        subtitle_lang = lang
+                        break
+            if not subtitle_lang:
                 return jsonify({'error': 'No subtitles found for this video'}), 404
 
             # Download the subtitle file to a temp directory
             with tempfile.TemporaryDirectory() as tmpdir:
                 ydl_opts_dl = ydl_opts.copy()
                 ydl_opts_dl['outtmpl'] = {'default': os.path.join(tmpdir, '%(id)s.%(ext)s')}
-                ydl_opts_dl['skip_download'] = True
-                ydl_opts_dl['writesubtitles'] = True
-                ydl_opts_dl['writeautomaticsub'] = True
                 ydl_opts_dl['subtitleslangs'] = [subtitle_lang]
-                ydl_opts_dl['quiet'] = True
                 with yt_dlp.YoutubeDL(ydl_opts_dl) as ydl_dl:
                     ydl_dl.download([url])
                 # Find the SRT file
@@ -137,7 +147,9 @@ def get_subtitles():
         return jsonify({
             'success': True,
             'video_id': video_id,
-            'subtitles': transcript
+            'subtitles': transcript,
+            'lang': subtitle_lang,
+            'note': 'If you get a 429 error, try providing fresh cookies.txt from a browser session where you loaded the desired subtitles.'
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
