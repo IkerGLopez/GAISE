@@ -1,0 +1,19 @@
+#contentEditable {
+  position: fixed;
+  // top: 0;
+  // left: 0;
+  line-height: 1.25; // lineHeightMultiplier
+  font-family: 'Excalifont';
+  min-width: 1px;
+  display: inline-block;
+  white-space: pre;
+  outline: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  overflow: hidden; // Select Text issue
+  transform-origin: top left; // For Scale
+
+  // FOR DEV: Обведення прямокутника
+  // border: 1px solid green;
+}

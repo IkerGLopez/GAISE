@@ -1,0 +1,140 @@
+:root {
+  --gray-25:  #FFFFFF;
+  --gray-50:  #F3F3F3;
+  --gray-75:  #F0F0F0;
+  --gray-100: #E9EBEC;
+  --gray-200: #E9E9E9;
+  --gray-250: #DEE2E3;
+  --gray-300: #DADEE0;
+  --gray-400: #CCCECF;
+  --gray-500: #9F9F9F;
+  --gray-600: #6C757D;
+  --gray-700: #2E3439;
+
+  --font-primary: 'Inter', Arial, Helvetica, sans-serif;
+
+  --shadow-ambient: rgba(0, 0, 0, 0.1);
+
+  --toolbar-width: calc(8*36px + 10px + 20px + 30px);
+  --toolbar-height: 44px;
+
+  --border-size: 5px; // Equals to ZONE_BORDER
+  --border-color: #B2F2BB;
+
+  --color-picker-blue:   #1971C2; // ~ equals to colorList
+  --color-picker-red:    #E03131;
+  --color-picker-green:  #2F9E44;
+  --color-picker-orange: #F08C00;
+  --color-picker-black:  #1E1E1E;
+  --color-picker-white:  #FFFFFF;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  display: block;
+
+  #root {
+    user-select: none;
+    height: 100%;
+    display: flex;
+
+    #root_wrapper {
+      width: 100%;
+      height: 100%;
+
+      #whiteboard {
+        position: absolute;
+        width: 80%;
+        height: 80%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: -1;
+
+        /* https://www.magicpattern.design/tools/css-backgrounds */
+        background-color: #f5faff;
+        background-image: radial-gradient(#9d9d9d 0.8px, #f5faff 0.8px);
+        background-size: 16px 16px;
+      }
+
+      #zone_borders {
+        border-style: solid;
+        border-width: var(--border-size);
+        border-color: var(--border-color);
+        border-radius: 10px;
+        box-sizing: border-box;
+
+        position: absolute;
+        width: 100%;
+        height: 100%;
+
+        z-index: -1;
+
+        &::before {
+          content: "";
+          position: absolute;
+          top: calc(var(--border-size) * -1);
+          left: calc(var(--border-size) * -1);
+          height: 100%;
+          width: 100%;
+
+          border-style: solid;
+          border-width: var(--border-size);
+          border-color: var(--border-color);
+          border-radius: 20px;
+          outline: var(--border-size);
+        }
+      }
+
+      &.manipulation_mode {
+        #toolbar {
+          pointer-events: none;
+        }
+      }
+    }
+  }
+}
+
+@font-face {
+  font-family: 'Excalifont';
+  src: url('../../../assets/Excalifont-Regular.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+}
+
+// https://fonts.google.com/specimen/Inter
+@font-face {
+  font-family: 'Inter';
+  src: url('../../../assets/Inter_18pt-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../../../assets/Inter_18pt-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../../../assets/Inter_18pt-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../../../assets/Inter_18pt-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

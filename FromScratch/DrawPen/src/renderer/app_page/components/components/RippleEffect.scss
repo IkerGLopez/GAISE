@@ -1,0 +1,31 @@
+#ripple-wrapper {
+  .ripple-loader {
+    position: absolute;
+    pointer-events: none;
+
+    span {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      animation: ripple-loader 0.7s ease-out; // infinite;
+      border-style: solid;
+      border-radius: 50%;
+      border-width: 0;
+      border-color: #E60000;
+    }
+  }
+}
+
+@keyframes ripple-loader {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 1;
+    border-width: 4px;
+  }
+  100% {
+    width: 100px;
+    height: 100px;
+    opacity: 0;
+    border-width: 10px;
+  }
+}
