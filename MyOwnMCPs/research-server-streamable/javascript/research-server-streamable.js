@@ -74,6 +74,18 @@ mcpServer.registerTool(
       }`
     );
 
+    // Check if user has required scope
+    if (!authInfo?.scopes || !authInfo.scopes.includes("search_papers")) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Unauthorized: User lacks permission to search papers. Required scope: search_papers",
+          },
+        ],
+      };
+    }
+
     try {
       const papers = await searchArxivPapers(topic, max_results);
 
@@ -143,6 +155,18 @@ mcpServer.registerTool(
         authInfo?.userId || "anonymous"
       }`
     );
+
+    // Check if user has required scope
+    if (!authInfo?.scopes || !authInfo.scopes.includes("read_papers")) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Unauthorized: User lacks permission to read paper information. Required scope: read_papers",
+          },
+        ],
+      };
+    }
 
     try {
       // Get all topic directories
@@ -385,10 +409,18 @@ const OAUTH_CONFIG = {
   jwtSecret: process.env.JWT_SECRET || "your-jwt-secret-key",
 };
 
+// Valid user credentials (in production, use a database with hashed passwords)
+const VALID_USERS = [
+  { username: "researcher", password: "research123", scopes: ["read_papers", "search_papers"] },
+  { username: "student", password: "student123", scopes: ["read_papers", "search_papers"] },
+  { username: "admin", password: "admin123", scopes: ["read_papers", "search_papers"] },
+];
+
 // In-memory storage for OAuth flows (use database in production)
 const authorizationCodes = new Map();
 const accessTokens = new Map();
 const refreshTokens = new Map();
+const registeredClients = new Map(); // For Dynamic Client Registration
 
 // Create Express app
 const app = express();
@@ -422,6 +454,12 @@ function getBaseUrl(req) {
   const proto = req.headers["x-forwarded-proto"] || req.protocol;
   const host = req.headers["x-forwarded-host"] || req.headers.host;
   return `${proto}://${host}`;
+}
+
+// Normalize redirect URIs by trimming trailing slashes for comparison
+function normalizeUri(uri) {
+  if (!uri || typeof uri !== "string") return uri;
+  return uri.replace(/\/+$/, "");
 }
 
 // Helper to create/connect a transport for a session
@@ -602,7 +640,7 @@ app.get("/.well-known/jwks.json", (req, res) => {
   });
 });
 
-// OAuth Authorization Endpoint
+// OAuth Authorization Endpoint - Serve Login Form
 app.get("/authorize", (req, res) => {
   console.log(`🔐 GET /authorize from ${req.ip} with params:`, req.query);
   const {
@@ -625,16 +663,40 @@ app.get("/authorize", (req, res) => {
     });
   }
 
-  // Validate client_id
-  if (client_id !== OAUTH_CONFIG.clientId) {
+  // Validate client_id - check both hardcoded config and registered clients
+  const isHardcodedClient = client_id === OAUTH_CONFIG.clientId;
+  const registeredClient = registeredClients.get(client_id);
+  const isRegisteredClient = !!registeredClient;
+
+  if (!isHardcodedClient && !isRegisteredClient) {
     return res.status(400).json({
       error: "invalid_client",
       error_description: "Invalid client_id",
     });
   }
 
-  // Validate redirect_uri against allowed list
-  if (!OAUTH_CONFIG.allowedRedirectUris.includes(redirect_uri)) {
+  // For registered clients, validate redirect_uri
+  if (
+    isRegisteredClient &&
+    !registeredClient.redirectUris.some(
+      (u) => normalizeUri(u) === normalizeUri(redirect_uri)
+    )
+  ) {
+    return res.status(400).json({
+      error: "invalid_request",
+      error_description: `Invalid redirect_uri for this client. Allowed URIs: ${registeredClient.redirectUris.join(
+        ", "
+      )}`,
+    });
+  }
+
+  // For hardcoded client, validate redirect_uri against allowed list
+  if (
+    isHardcodedClient &&
+    !OAUTH_CONFIG.allowedRedirectUris.some(
+      (u) => normalizeUri(u) === normalizeUri(redirect_uri)
+    )
+  ) {
     return res.status(400).json({
       error: "invalid_request",
       error_description: `Invalid redirect_uri. Allowed URIs: ${OAUTH_CONFIG.allowedRedirectUris.join(
@@ -643,17 +705,103 @@ app.get("/authorize", (req, res) => {
     });
   }
 
-  // In a real implementation, you would show a login/consent screen
-  // For this demo, we'll auto-approve
-  const authCode = generateAuthorizationCode();
-  const userId = "demo-user-" + randomUUID(); // In real app, get from authenticated user
+  // Serve the login form HTML
+  res.sendFile(path.join(process.cwd(), "authorize.html"));
+});
 
-  // Store authorization code with PKCE details
+// OAuth Authorization Endpoint - Handle Login Submission
+app.post("/authorize", (req, res) => {
+  console.log(
+    `🔐 POST /authorize from ${req.ip} for user: ${req.body?.username}`
+  );
+  const {
+    username,
+    password,
+    client_id,
+    redirect_uri,
+    response_type,
+    scope,
+    state,
+    code_challenge,
+    code_challenge_method,
+  } = req.body;
+
+  // Validate required parameters
+  if (!client_id || !redirect_uri || response_type !== "code") {
+    return res.status(400).json({
+      error: "invalid_request",
+      error_description: "Missing or invalid required parameters",
+    });
+  }
+
+  // Validate client_id - check both hardcoded config and registered clients
+  const isHardcodedClient = client_id === OAUTH_CONFIG.clientId;
+  const registeredClient = registeredClients.get(client_id);
+  const isRegisteredClient = !!registeredClient;
+
+  if (!isHardcodedClient && !isRegisteredClient) {
+    return res.status(400).json({
+      error: "invalid_client",
+      error_description: "Invalid client_id",
+    });
+  }
+
+  // For registered clients, validate redirect_uri
+  if (
+    isRegisteredClient &&
+    !registeredClient.redirectUris.some(
+      (u) => normalizeUri(u) === normalizeUri(redirect_uri)
+    )
+  ) {
+    return res.status(400).json({
+      error: "invalid_request",
+      error_description: `Invalid redirect_uri for this client. Allowed URIs: ${registeredClient.redirectUris.join(
+        ", "
+      )}`,
+    });
+  }
+
+  // For hardcoded client, validate redirect_uri against allowed list
+  if (
+    isHardcodedClient &&
+    !OAUTH_CONFIG.allowedRedirectUris.some(
+      (u) => normalizeUri(u) === normalizeUri(redirect_uri)
+    )
+  ) {
+    return res.status(400).json({
+      error: "invalid_request",
+      error_description: `Invalid redirect_uri. Allowed URIs: ${OAUTH_CONFIG.allowedRedirectUris.join(
+        ", "
+      )}`,
+    });
+  }
+
+  // Validate credentials against VALID_USERS
+  const validUser = VALID_USERS.find(
+    (user) => user.username === username && user.password === password
+  );
+
+  if (!validUser) {
+    console.log(`❌ Invalid login attempt for user: ${username}`);
+    return res.status(401).json({
+      error: "invalid_credentials",
+      error_description: "Invalid username or password",
+    });
+  }
+
+  console.log(`✅ Valid login for user: ${username}`);
+
+  // Generate authorization code
+  const authCode = generateAuthorizationCode();
+  const userId = username; // Use username as user ID
+
+  // Store authorization code with PKCE details and user scopes
   authorizationCodes.set(authCode, {
     clientId: client_id,
     redirectUri: redirect_uri,
-    scope: scope || OAUTH_CONFIG.scopes.join(" "),
+    scope: scope || validUser.scopes.join(" "),
     userId: userId,
+    userScopes: validUser.scopes,
     codeChallenge: code_challenge,
     codeChallengeMethod: code_challenge_method,
     expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
@@ -663,14 +811,11 @@ app.get("/authorize", (req, res) => {
     `✅ Generated authorization code: ${authCode} for user: ${userId}`
   );
 
-  // Redirect back to client with authorization code
-  const redirectUrl = new URL(redirect_uri);
-  redirectUrl.searchParams.set("code", authCode);
-  if (state) {
-    redirectUrl.searchParams.set("state", state);
-  }
-
-  res.redirect(redirectUrl.toString());
+  // Return the authorization code to the frontend (not a redirect here)
+  res.json({
+    code: authCode,
+    state: state,
+  });
 });
 
 // OAuth Token Endpoint
@@ -700,8 +845,12 @@ app.post("/token", (req, res) => {
       });
     }
 
-    // Validate client_id
-    if (client_id !== OAUTH_CONFIG.clientId) {
+    // Validate client_id - check both hardcoded config and registered clients
+    const isHardcodedClient = client_id === OAUTH_CONFIG.clientId;
+    const registeredClient = registeredClients.get(client_id);
+    const isRegisteredClient = !!registeredClient;
+
+    if (!isHardcodedClient && !isRegisteredClient) {
       return res.status(400).json({
         error: "invalid_client",
         error_description: "Invalid client_id",
@@ -721,7 +870,10 @@ app.post("/token", (req, res) => {
     // For non-PKCE flows (confidential clients), client_secret is required
     if (!authData.codeChallenge) {
       // Non-PKCE flow - require client_secret
-      if (client_secret !== OAUTH_CONFIG.clientSecret) {
+      const expectedSecret = isRegisteredClient
+        ? registeredClient.clientSecret
+        : OAUTH_CONFIG.clientSecret;
+      if (client_secret !== expectedSecret) {
         return res.status(400).json({
           error: "invalid_client",
           error_description:
@@ -730,11 +882,16 @@ app.post("/token", (req, res) => {
       }
     } else {
       // PKCE flow - client_secret is optional but if provided, must be correct
-      if (client_secret && client_secret !== OAUTH_CONFIG.clientSecret) {
-        return res.status(400).json({
-          error: "invalid_client",
-          error_description: "Invalid client_secret",
-        });
+      if (client_secret) {
+        const expectedSecret = isRegisteredClient
+          ? registeredClient.clientSecret
+          : OAUTH_CONFIG.clientSecret;
+        if (client_secret !== expectedSecret) {
+          return res.status(400).json({
+            error: "invalid_client",
+            error_description: "Invalid client_secret",
+          });
+        }
       }
     }
 
@@ -776,7 +933,7 @@ app.post("/token", (req, res) => {
     }
 
     // Generate tokens
-    const scopes = authData.scope.split(" ");
+    const scopes = authData.userScopes || authData.scope.split(" ");
     const accessToken = generateAccessToken(authData.userId, scopes);
     const refreshToken = generateRefreshToken(authData.userId);
 
@@ -789,6 +946,7 @@ app.post("/token", (req, res) => {
 
     refreshTokens.set(refreshToken, {
       userId: authData.userId,
+      scopes: scopes,
       expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
@@ -824,11 +982,11 @@ app.post("/token", (req, res) => {
     // Generate new access token
     const accessToken = generateAccessToken(
       refreshData.userId,
-      OAUTH_CONFIG.scopes
+      refreshData.scopes || OAUTH_CONFIG.scopes
     );
     accessTokens.set(accessToken, {
       userId: refreshData.userId,
-      scopes: OAUTH_CONFIG.scopes,
+      scopes: refreshData.scopes || OAUTH_CONFIG.scopes,
       expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
     });
 
@@ -836,12 +994,113 @@ app.post("/token", (req, res) => {
       access_token: accessToken,
       token_type: "Bearer",
       expires_in: 3600,
-      scope: OAUTH_CONFIG.scopes.join(" "),
+      scope: (refreshData.scopes || OAUTH_CONFIG.scopes).join(" "),
     });
   } else {
     res.status(400).json({
       error: "unsupported_grant_type",
       error_description: "Grant type not supported",
+    });
+  }
+});
+
+// Dynamic Client Registration Endpoint (RFC 7591)
+app.post("/register", (req, res) => {
+  console.log(
+    `📝 POST /register from ${req.ip} - Client: ${req.body?.client_name}`
+  );
+
+  try {
+    const {
+      redirect_uris,
+      client_name,
+      client_uri,
+      logo_uri,
+      scope,
+      grant_types,
+      response_types,
+      token_endpoint_auth_method,
+      contacts,
+    } = req.body;
+
+    // Validate required parameters according to RFC 7591
+    if (!redirect_uris || !Array.isArray(redirect_uris) || redirect_uris.length === 0) {
+      return res.status(400).json({
+        error: "invalid_request",
+        error_description: "redirect_uris is required and must be a non-empty array",
+      });
+    }
+
+    // Validate redirect URIs against allowed list (strip trailing slash)
+    const allowed = new Set(
+      (OAUTH_CONFIG.allowedRedirectUris || []).map((u) => normalizeUri(u))
+    );
+    const invalidUris = redirect_uris.filter(
+      (uri) => !allowed.has(normalizeUri(uri))
+    );
+
+    if (invalidUris.length > 0) {
+      return res.status(400).json({
+        error: "invalid_request",
+        error_description: `Invalid redirect URIs: ${invalidUris.join(
+          ", "
+        )}. Allowed URIs: ${OAUTH_CONFIG.allowedRedirectUris.join(", ")}`,
+      });
+    }
+
+    // Generate client credentials
+    const clientId = randomUUID();
+    const clientSecret = randomUUID(); // In production, use a more secure method
+    const now = Math.floor(Date.now() / 1000);
+
+    // Store client information
+    const clientInfo = {
+      clientId,
+      clientSecret,
+      redirectUris: redirect_uris,
+      clientName: client_name || "MCP Client",
+      clientUri: client_uri,
+      logoUri: logo_uri,
+      scope: scope || OAUTH_CONFIG.scopes.join(" "),
+      grantTypes: grant_types || ["authorization_code"],
+      responseTypes: response_types || ["code"],
+      tokenEndpointAuthMethod:
+        token_endpoint_auth_method || "client_secret_post",
+      contacts: contacts || [],
+      clientIdIssuedAt: now,
+      clientSecretExpiresAt: 0, // 0 means no expiration
+      createdAt: new Date().toISOString(),
+    };
+
+    registeredClients.set(clientId, clientInfo);
+
+    console.log(
+      `✅ Registered new client: ${clientId} (${client_name || "MCP Client"})`
+    );
+
+    // Return client information according to OAuth 2.0 Dynamic Client
+    // Registration spec
+    res.status(201).json({
+      client_id: clientId,
+      client_secret: clientSecret,
+      client_id_issued_at: now,
+      client_secret_expires_at: 0, // 0 means no expiration
+      redirect_uris: redirect_uris,
+      client_name: client_name || "MCP Client",
+      client_uri: client_uri,
+      logo_uri: logo_uri,
+      scope: scope || OAUTH_CONFIG.scopes.join(" "),
+      grant_types: grant_types || ["authorization_code"],
+      response_types: response_types || ["code"],
+      token_endpoint_auth_method:
+        token_endpoint_auth_method || "client_secret_post",
+      contacts: contacts || [],
+    });
+  } catch (error) {
+    console.error("❌ Error processing registration request:", error);
+    res.status(500).json({
+      error: "server_error",
+      error_description: "Internal server error during client registration",
     });
   }
 });
@@ -983,25 +1242,30 @@ app.get("/", (req, res) => {
   res.json({
     name: "ArXiv Research Server MCP",
     version: "1.0.0",
-    description: "MCP server for searching and managing arXiv papers",
+    description: "MCP server for searching and managing arXiv papers with OAuth authentication",
+    authentication: "OAuth 2.0 with user credentials required",
     endpoints: {
       mcp: `${base}/mcp`,
       health: `${base}/health`,
       authorize: `${base}/authorize`,
       token: `${base}/token`,
+      register: `${base}/register`,
       callback: `${base}/callback`,
       tokeninfo: `${base}/tokeninfo`,
     },
     oauth: {
       authorization_url: `${base}/authorize`,
       token_url: `${base}/token`,
+      registration_url: `${base}/register`,
       client_id: OAUTH_CONFIG.clientId,
       scopes: OAUTH_CONFIG.scopes,
+      registered_clients: registeredClients.size,
     },
     tools: ["search_papers", "extract_info"],
     resources: ["papers://folders", "papers://{topic}"],
     prompts: ["generate_search_prompt"],
     activeSessions: transports.size,
+    registeredClients: registeredClients.size,
   });
 });
 
