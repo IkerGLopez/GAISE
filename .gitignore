@@ -11,6 +11,7 @@ config.local.*
 .claude
 .venv
 videos/
+.github
 
 # ============================================
 # SISTEMAS OPERATIVOS
