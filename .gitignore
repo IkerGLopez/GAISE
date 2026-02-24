@@ -12,6 +12,8 @@ config.local.*
 .venv
 videos/
 .github
+.playwright
+.playwright-mcp
 
 # ============================================
 # SISTEMAS OPERATIVOS

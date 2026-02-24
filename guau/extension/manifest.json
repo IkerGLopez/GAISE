@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Guau MP3 Downloader",
+  "version": "0.1",
+  "description": "Adds a download-MP3 button to guau.eus audio pages",
+  "permissions": ["clipboardWrite"],
+  "host_permissions": [
+    "https://guau.eus/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://guau.eus/m/euskadi-irratia-kantu-kontari-*"] ,
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
